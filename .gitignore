@@ -1,0 +1,36 @@
+# PlatformIO build artifacts
+.pio/
+
+# IDE / editor directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Compiled output
+*.o
+*.elf
+*.bin
+*.map
+*.a
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# NOTE: temp_volosr/ is intentionally tracked — it contains reference code

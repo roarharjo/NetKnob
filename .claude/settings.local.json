@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pio run:*)",
+      "Bash(timeout 10 pio device monitor -p COM9 -b 115200)",
+      "Bash(timeout 8 pio device monitor -p COM9 -b 115200)",
+      "Bash(timeout 12 pio device monitor -p COM9 -b 115200 --no-reconnect)",
+      "Bash(pio device:*)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Read(//tmp/**)",
+      "Bash(python -c ':*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(taskkill /F /IM platformio.exe)",
+      "Bash(rm -rf .pio/libdeps)",
+      "Bash(wmic process:*)",
+      "Bash(taskkill /F /PID 26660)",
+      "Bash(taskkill /F /PID 7256)",
+      "Bash(taskkill /F /PID 27760)",
+      "Bash(powershell -Command 'Get-Process | Where-Object { $_.Path -like '\\\\''*python*'\\\\'' -or $_.Path -like '\\\\''*pio*'\\\\'' -or $_.Path -like '\\\\''*scons*'\\\\'' } | Stop-Process -Force')",
+      "WebFetch(domain:api.github.com)"
+    ]
+  }
+}
