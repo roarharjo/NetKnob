@@ -13,6 +13,19 @@ static uint8_t debounce_a, debounce_b;
 static volatile int8_t delta;
 static esp_timer_handle_t timer_handle;
 
+static EncoderEvent event_ring[ENCODER_EVENT_SLOTS];
+static volatile uint8_t evt_head = 0;
+static volatile uint8_t evt_tail = 0;
+
+static void push_event(int8_t dir) {
+    uint8_t next = (evt_head + 1) % ENCODER_EVENT_SLOTS;
+    if (next != evt_tail) {
+        event_ring[evt_head].direction = dir;
+        event_ring[evt_head].timestamp_us = (uint32_t)esp_timer_get_time();
+        evt_head = next;
+    }
+}
+
 static void process_channel(uint8_t current, uint8_t *prev, uint8_t *cnt, int8_t step) {
     if (current == 0) {
         if (current != *prev)
@@ -23,6 +36,7 @@ static void process_channel(uint8_t current, uint8_t *prev, uint8_t *cnt, int8_t
         if (current != *prev && ++(*cnt) >= ENCODER_DEBOUNCE) {
             *cnt = 0;
             delta += step;
+            push_event(step);
         } else if (current == *prev) {
             *cnt = 0;
         }
@@ -74,4 +88,16 @@ int8_t encoder_get_delta() {
     delta = 0;
     portEXIT_CRITICAL(&delta_mux);
     return d;
+}
+
+uint8_t encoder_get_events(EncoderEvent* out, uint8_t max_count) {
+    portENTER_CRITICAL(&delta_mux);
+    uint8_t count = 0;
+    while (evt_tail != evt_head && count < max_count) {
+        out[count] = event_ring[evt_tail];
+        evt_tail = (evt_tail + 1) % ENCODER_EVENT_SLOTS;
+        count++;
+    }
+    portEXIT_CRITICAL(&delta_mux);
+    return count;
 }
