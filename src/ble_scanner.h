@@ -14,7 +14,10 @@ enum BleDeviceType {
     BLE_TYPE_HEADPHONES,
     BLE_TYPE_SPEAKER,
     BLE_TYPE_BEACON,
-    BLE_TYPE_IOT
+    BLE_TYPE_IOT,
+    BLE_TYPE_TRACKER,     // AirTag, Tile, etc.
+    BLE_TYPE_TV,
+    BLE_TYPE_PERIPHERAL   // Keyboard, mouse, gamepad
 };
 
 struct BleDevice {
@@ -25,7 +28,8 @@ struct BleDevice {
     int8_t    rssi_avg;
     int8_t    tx_power;
     uint8_t   device_type;     // BleDeviceType
-    uint16_t  company_id;
+    uint16_t  company_id;      // From manufacturer data AD type (who made the AD payload)
+    char      mfr_name[16];    // Guessed device manufacturer (from name, OUI, or company_id)
     uint16_t  service_uuids[8];
     uint8_t   service_count;
     uint32_t  first_seen_ms;

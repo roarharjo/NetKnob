@@ -53,6 +53,9 @@ static const char* type_prefix(uint8_t t) {
         case BLE_TYPE_SPEAKER:    return "[S]";
         case BLE_TYPE_BEACON:     return "[B]";
         case BLE_TYPE_IOT:        return "[I]";
+        case BLE_TYPE_TRACKER:    return "[T]";
+        case BLE_TYPE_TV:         return "[V]";
+        case BLE_TYPE_PERIPHERAL: return "[K]";
         default:                  return "[?]";
     }
 }
@@ -377,12 +380,16 @@ static void render_detail(BleScannerState* s) {
     // Device type
     lv_label_set_text_fmt(lbl_det_type, "Type  %s", ble_device_type_str(dev->device_type));
 
-    // Manufacturer from company_id lookup
-    const char* mfr = ble_manufacturer_lookup(dev->company_id);
-    if (mfr) {
-        lv_label_set_text_fmt(lbl_det_mfr, "Mfr   %s", mfr);
+    // Manufacturer — prefer guessed name, fall back to company_id
+    if (dev->mfr_name[0]) {
+        lv_label_set_text_fmt(lbl_det_mfr, "Mfr   %s", dev->mfr_name);
     } else if (dev->company_id != 0) {
-        lv_label_set_text_fmt(lbl_det_mfr, "Mfr   0x%04X", dev->company_id);
+        const char* mfr = ble_manufacturer_lookup(dev->company_id);
+        if (mfr) {
+            lv_label_set_text_fmt(lbl_det_mfr, "Ad    %s", mfr);  // "Ad" = advertisement company
+        } else {
+            lv_label_set_text_fmt(lbl_det_mfr, "Ad    0x%04X", dev->company_id);
+        }
     } else {
         lv_label_set_text(lbl_det_mfr, "Mfr   --");
     }
