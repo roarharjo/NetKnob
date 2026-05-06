@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <lvgl.h>
+#include <esp_system.h>
 #include "display.h"
 #include "encoder.h"
 #include "touch.h"
@@ -33,6 +34,10 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     Serial.println("NetKnob Phase 2 — booting...");
+
+    esp_reset_reason_t reason = esp_reset_reason();
+    const char* reasons[] = {"UNKNOWN","POWERON","EXT","SW","PANIC","INT_WDT","TASK_WDT","WDT","DEEPSLEEP","BROWNOUT","SDIO"};
+    Serial.printf("[main] reset reason: %s (%d)\n", reason < 11 ? reasons[reason] : "?", reason);
     Serial.printf("[main] free heap: %d, PSRAM: %d\n", ESP.getFreeHeap(), ESP.getPsramSize());
 
     settings_init();
@@ -184,9 +189,10 @@ void loop() {
     // 10. Serial debug heartbeat
     if (now - last_heartbeat >= SERIAL_HEARTBEAT_MS) {
         last_heartbeat = now;
-        WifiScannerState *s = scanner_get_state();
-        Serial.printf("[heartbeat] screen=%d ch=%d aps=%d heap=%d\n",
-            navigation_get_active(), s->current_channel, s->ap_count,
-            ESP.getFreeHeap());
+        WifiScannerState *ws = scanner_get_state();
+        BleScannerState *bs = ble_scanner_get_state();
+        Serial.printf("[heartbeat] screen=%d ch=%d aps=%d ble=%d heap=%d\n",
+            navigation_get_active(), ws->current_channel, ws->ap_count,
+            bs->device_count, ESP.getFreeHeap());
     }
 }

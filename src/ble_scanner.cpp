@@ -235,9 +235,9 @@ static uint8_t guess_device_type(NimBLEAdvertisedDevice* dev) {
 
     // 4. Check device name patterns (last resort)
     if (dev->haveName()) {
-        const char* name = dev->getName().c_str();
+        std::string nameStr = dev->getName();
         for (size_t i = 0; i < NAME_PATTERN_COUNT; i++) {
-            if (name_patterns[i].device_type != 0 && contains_ci(name, name_patterns[i].pattern)) {
+            if (name_patterns[i].device_type != 0 && contains_ci(nameStr.c_str(), name_patterns[i].pattern)) {
                 return name_patterns[i].device_type;
             }
         }
@@ -252,9 +252,9 @@ static void guess_manufacturer(BleDevice* entry, NimBLEAdvertisedDevice* dev) {
 
     // 1. Check device name first — most reliable
     if (dev->haveName()) {
-        const char* name = dev->getName().c_str();
+        std::string nameStr = dev->getName();
         for (size_t i = 0; i < NAME_PATTERN_COUNT; i++) {
-            if (contains_ci(name, name_patterns[i].pattern)) {
+            if (contains_ci(nameStr.c_str(), name_patterns[i].pattern)) {
                 strncpy(entry->mfr_name, name_patterns[i].manufacturer,
                         sizeof(entry->mfr_name) - 1);
                 return;
@@ -438,7 +438,7 @@ void ble_scanner_init() {
     pScan = NimBLEDevice::getScan();
     pScan->setAdvertisedDeviceCallbacks(&scanCb, true);  // wantDuplicates=true for live RSSI updates
     pScan->setActiveScan(true);   // Active scan for scan response (device names)
-    pScan->setMaxResults(0);      // Don't cache results in NimBLE (we manage our own list)
+    pScan->setMaxResults(0);      // Callbacks only — don't cache in NimBLE (prevents heap leak)
     pScan->setInterval(160);      // 100ms in 0.625ms units
     pScan->setWindow(128);        // 80ms in 0.625ms units
     memset(&state, 0, sizeof(state));
@@ -462,9 +462,8 @@ void ble_scanner_stop() {
 }
 
 void ble_scanner_update() {
-    if (xSemaphoreTake(ble_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
-
     uint32_t now = millis();
+    if (xSemaphoreTake(ble_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
 
     for (uint8_t i = 0; i < state.device_count; ) {
         uint32_t age = now - state.devices[i].last_seen_ms;

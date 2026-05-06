@@ -97,10 +97,11 @@ The Phase 1 encoder accumulated a simple delta counter. Phase 2 adds a parallel 
 
 | Issue | Severity | Notes |
 |---|---|---|
-| BLE callback thread safety | Low | NimBLE callback writes to `state` from BLE task; main loop reads. Simple struct writes, no observed crashes in testing. Proper fix: mutex or queue. |
-| `display_clear()` is dead code | Cosmetic | Defined in display.cpp, declared in display.h, called by nothing. Remove or repurpose for stealth mode. |
+| BLE callback thread safety | ~~Low~~ **Fixed** | Fixed in bugfix session: FreeRTOS mutex + snapshot rendering pattern. |
+| `display_clear()` is dead code | ~~Cosmetic~~ **Fixed** | Removed in bugfix session. |
 | Palm cover / stealth mode | Deferred | Skipped — CST816T likely can't distinguish palm from finger. FSD has fallback trigger defined. |
-| WiFi scanner crosshair lines | Cosmetic | Thin decorative lines from Phase 1 occasionally visible through text. Minor. |
+| WiFi scanner crosshair lines | ~~Cosmetic~~ **Fixed** | Removed in bugfix session. |
+| BLE scan response names | Known limitation | Devices that only advertise names in scan response (not ADV packet) show as Unknown. Most phones, some watches affected. Devices like LG TV, BYD, Oura Ring that embed names in ADV packets show correctly. |
 
 ---
 
