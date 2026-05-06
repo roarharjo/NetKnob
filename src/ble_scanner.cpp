@@ -1,10 +1,12 @@
 #include "ble_scanner.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <freertos/semphr.h>
 #include <string.h>
 
 static BleScannerState state;
 static NimBLEScan* pScan = NULL;
+static SemaphoreHandle_t ble_mutex = NULL;
 
 // --- Manufacturer lookup table (25 entries from BT SIG) ---
 struct MfrEntry {
@@ -351,6 +353,9 @@ class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
         entry.first_seen_ms = now;
         entry.last_seen_ms = now;
 
+        // Mutex-protect all shared state access (5ms timeout — drop advertisement if busy)
+        if (xSemaphoreTake(ble_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+
         // Dedup by MAC
         for (uint8_t i = 0; i < state.device_count; i++) {
             if (memcmp(state.devices[i].mac, entry.mac, 6) == 0) {
@@ -377,6 +382,7 @@ class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
                     memcpy(state.devices[i].service_uuids, entry.service_uuids, sizeof(entry.service_uuids));
                     state.devices[i].service_count = entry.service_count;
                 }
+                xSemaphoreGive(ble_mutex);
                 return;
             }
         }
@@ -405,6 +411,7 @@ class ScanCallbacks : public NimBLEAdvertisedDeviceCallbacks {
                 state.devices[evict_idx] = entry;
             }
         }
+        xSemaphoreGive(ble_mutex);
     }
 };
 
@@ -426,10 +433,12 @@ static void sort_devices() {
 // --- Public API ---
 
 void ble_scanner_init() {
+    ble_mutex = xSemaphoreCreateMutex();
     NimBLEDevice::init("NetKnob");
     pScan = NimBLEDevice::getScan();
-    pScan->setAdvertisedDeviceCallbacks(&scanCb, false);
+    pScan->setAdvertisedDeviceCallbacks(&scanCb, true);  // wantDuplicates=true for live RSSI updates
     pScan->setActiveScan(true);   // Active scan for scan response (device names)
+    pScan->setMaxResults(0);      // Don't cache results in NimBLE (we manage our own list)
     pScan->setInterval(160);      // 100ms in 0.625ms units
     pScan->setWindow(128);        // 80ms in 0.625ms units
     memset(&state, 0, sizeof(state));
@@ -453,6 +462,8 @@ void ble_scanner_stop() {
 }
 
 void ble_scanner_update() {
+    if (xSemaphoreTake(ble_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
+
     uint32_t now = millis();
 
     for (uint8_t i = 0; i < state.device_count; ) {
@@ -472,8 +483,17 @@ void ble_scanner_update() {
     }
 
     sort_devices();
+    xSemaphoreGive(ble_mutex);
 }
 
 BleScannerState* ble_scanner_get_state() {
     return &state;
+}
+
+bool ble_scanner_lock(uint32_t timeout_ms) {
+    return xSemaphoreTake(ble_mutex, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+}
+
+void ble_scanner_unlock() {
+    xSemaphoreGive(ble_mutex);
 }

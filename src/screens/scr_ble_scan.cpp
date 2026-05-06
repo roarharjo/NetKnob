@@ -440,11 +440,20 @@ static void hide() {
 static void update() {
     ble_scanner_update();
 
-    BleScannerState* s = ble_scanner_get_state();
+    // Snapshot state under mutex for consistent rendering
+    static BleScannerState snapshot;
+    BleScannerState* real = ble_scanner_get_state();
+
+    if (!ble_scanner_lock(10)) return;  // Skip frame if mutex busy
+    memcpy(&snapshot, real, sizeof(BleScannerState));
+    ble_scanner_unlock();
+
+    BleScannerState* s = &snapshot;
 
     // Exit detail view if device list became empty
     if (s->detail_view && s->device_count == 0) {
         s->detail_view = false;
+        real->detail_view = false;
         hide_detail();
         show_list();
         dirty = true;

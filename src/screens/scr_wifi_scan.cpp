@@ -16,7 +16,8 @@
 static lv_obj_t* scr_root = NULL;
 
 // --- Scan view LVGL objects ---
-#define VISIBLE_AP_ROWS 4
+#define VISIBLE_AP_ROWS 12
+static uint8_t scroll_offset = 0;
 static lv_obj_t *lbl_channel   = NULL;
 static lv_obj_t *lbl_freq      = NULL;
 static lv_obj_t *lbl_ap_count  = NULL;
@@ -119,23 +120,6 @@ static void build_scan_screen()
         lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
     }
 
-    // Crosshair lines — subtle horizontal and vertical
-    lv_obj_t *h_line = lv_obj_create(scr);
-    lv_obj_set_size(h_line, 320, 1);
-    lv_obj_center(h_line);
-    lv_obj_set_style_bg_color(h_line, lv_color_make(0x10, 0x14, 0x1A), 0);
-    lv_obj_set_style_bg_opa(h_line, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(h_line, 0, 0);
-    lv_obj_clear_flag(h_line, (lv_obj_flag_t)(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
-
-    lv_obj_t *v_line = lv_obj_create(scr);
-    lv_obj_set_size(v_line, 1, 320);
-    lv_obj_center(v_line);
-    lv_obj_set_style_bg_color(v_line, lv_color_make(0x10, 0x14, 0x1A), 0);
-    lv_obj_set_style_bg_opa(v_line, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(v_line, 0, 0);
-    lv_obj_clear_flag(v_line, (lv_obj_flag_t)(LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE));
-
     // Activity arc — outer ring, fills with AP count. Neon cyan glow.
     arc_activity = lv_arc_create(scr);
     lv_obj_set_size(arc_activity, 350, 350);
@@ -185,22 +169,22 @@ static void build_scan_screen()
     lv_obj_align(lbl_no_aps, LV_ALIGN_CENTER, 0, 10);
     lv_obj_add_flag(lbl_no_aps, LV_OBJ_FLAG_HIDDEN);
 
-    // AP list — 4 rows at 20pt, generous spacing
+    // AP list — 12 rows at 12pt, compact spacing for max visibility
     for (int i = 0; i < VISIBLE_AP_ROWS; i++) {
-        int y = 108 + i * 44;
+        int y = 100 + i * 18;
 
         lbl_ap_ssid[i] = lv_label_create(scr);
-        lv_obj_set_style_text_font(lbl_ap_ssid[i], &lv_font_montserrat_20, 0);
-        lv_obj_set_width(lbl_ap_ssid[i], 190);
+        lv_obj_set_style_text_font(lbl_ap_ssid[i], &lv_font_montserrat_12, 0);
+        lv_obj_set_width(lbl_ap_ssid[i], 220);
         lv_label_set_long_mode(lbl_ap_ssid[i], LV_LABEL_LONG_CLIP);
         lv_obj_set_style_text_color(lbl_ap_ssid[i], COL_GRAY, 0);
-        lv_obj_set_pos(lbl_ap_ssid[i], 50, y);
+        lv_obj_set_pos(lbl_ap_ssid[i], 36, y);
         lv_obj_add_flag(lbl_ap_ssid[i], LV_OBJ_FLAG_HIDDEN);
 
         lbl_ap_rssi[i] = lv_label_create(scr);
-        lv_obj_set_style_text_font(lbl_ap_rssi[i], &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(lbl_ap_rssi[i], &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(lbl_ap_rssi[i], COL_GRAY, 0);
-        lv_obj_set_pos(lbl_ap_rssi[i], 258, y + 2);
+        lv_obj_set_pos(lbl_ap_rssi[i], 268, y);
         lv_obj_add_flag(lbl_ap_rssi[i], LV_OBJ_FLAG_HIDDEN);
     }
 
@@ -433,7 +417,11 @@ static void render_scan_list(WifiScannerState *state)
         }
     } else {
         lv_obj_add_flag(lbl_no_aps, LV_OBJ_FLAG_HIDDEN);
-        uint8_t visible = state->ap_count < VISIBLE_AP_ROWS ? state->ap_count : VISIBLE_AP_ROWS;
+
+        // Clamp scroll_offset
+        if (scroll_offset >= state->ap_count) scroll_offset = 0;
+        uint8_t remaining = state->ap_count - scroll_offset;
+        uint8_t visible = remaining < VISIBLE_AP_ROWS ? remaining : VISIBLE_AP_ROWS;
 
         // Count encryption types for footer
         uint8_t n_open = 0, n_wep = 0, n_wpa = 0, n_wpa2 = 0, n_wpa3 = 0;
@@ -448,8 +436,9 @@ static void render_scan_list(WifiScannerState *state)
         }
 
         for (int i = 0; i < visible; i++) {
-            const AccessPoint *ap = &state->ap_list[i];
-            bool selected = (i == state->selected_index);
+            uint8_t ap_idx = scroll_offset + i;
+            const AccessPoint *ap = &state->ap_list[ap_idx];
+            bool selected = (ap_idx == state->selected_index);
             const char *name = (ap->hidden || ap->ssid[0] == '\0') ? "[hidden]" : ap->ssid;
 
             // SSID with encryption indicator
@@ -470,8 +459,8 @@ static void render_scan_list(WifiScannerState *state)
                 }
             }
 
-            // RSSI: signal bars + dBm, colored
-            lv_label_set_text_fmt(lbl_ap_rssi[i], "%s %d dBm", rssi_bars(ap->rssi), ap->rssi);
+            // RSSI: color-coded dBm value (compact for 12px font)
+            lv_label_set_text_fmt(lbl_ap_rssi[i], "%d", ap->rssi);
             lv_obj_set_style_text_color(lbl_ap_rssi[i], rssi_color(ap->rssi), 0);
 
             lv_obj_clear_flag(lbl_ap_ssid[i], LV_OBJ_FLAG_HIDDEN);
@@ -563,10 +552,13 @@ static void update_live(WifiScannerState *state)
     }
 
     // Update visible rows — both SSID and RSSI to stay in sync after sort
-    uint8_t visible = state->ap_count < VISIBLE_AP_ROWS ? state->ap_count : VISIBLE_AP_ROWS;
+    if (scroll_offset >= state->ap_count) scroll_offset = 0;
+    uint8_t remaining = state->ap_count - scroll_offset;
+    uint8_t visible = remaining < VISIBLE_AP_ROWS ? remaining : VISIBLE_AP_ROWS;
     for (int i = 0; i < visible; i++) {
-        const AccessPoint *ap = &state->ap_list[i];
-        bool selected = (i == state->selected_index);
+        uint8_t ap_idx = scroll_offset + i;
+        const AccessPoint *ap = &state->ap_list[ap_idx];
+        bool selected = (ap_idx == state->selected_index);
         const char *name = (ap->hidden || ap->ssid[0] == '\0') ? "[hidden]" : ap->ssid;
 
         // SSID — keep in sync with current sort order
@@ -587,8 +579,8 @@ static void update_live(WifiScannerState *state)
             }
         }
 
-        // RSSI text and color
-        lv_label_set_text_fmt(lbl_ap_rssi[i], "%s %d dBm", rssi_bars(ap->rssi), ap->rssi);
+        // RSSI: color-coded dBm value
+        lv_label_set_text_fmt(lbl_ap_rssi[i], "%d", ap->rssi);
         lv_obj_set_style_text_color(lbl_ap_rssi[i], rssi_color(ap->rssi), 0);
     }
 
@@ -701,6 +693,7 @@ void scr_wifi_scan_on_encoder(int8_t delta) {
     uint8_t ch = s->current_channel;
     ch = ((ch - 1 + delta + CHANNEL_MAX) % CHANNEL_MAX) + 1;
     scanner_set_channel(ch);
+    scroll_offset = 0;
     haptic_click();
     prev_ap_count = 0xFF;  // Force dirty on channel change
     dirty = true;
@@ -716,6 +709,15 @@ void scr_wifi_scan_on_tap() {
     } else if (s->ap_count > 0) {
         s->selected_index = (s->selected_index + 1) % s->ap_count;
         memcpy(s->selected_bssid, s->ap_list[s->selected_index].bssid, 6);
+
+        // Auto-scroll to keep selection visible
+        if (s->selected_index < scroll_offset) {
+            scroll_offset = s->selected_index;
+        } else if (s->selected_index >= scroll_offset + VISIBLE_AP_ROWS) {
+            scroll_offset = s->selected_index - VISIBLE_AP_ROWS + 1;
+        }
+
+        haptic_click();
         dirty = true;
     }
 }

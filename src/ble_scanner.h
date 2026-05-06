@@ -51,5 +51,7 @@ void ble_scanner_start();
 void ble_scanner_stop();
 void ble_scanner_update();   // Call from main loop: age devices, mark stale, remove old
 BleScannerState* ble_scanner_get_state();
+bool ble_scanner_lock(uint32_t timeout_ms);
+void ble_scanner_unlock();
 const char* ble_manufacturer_lookup(uint16_t company_id);
 const char* ble_device_type_str(uint8_t type);

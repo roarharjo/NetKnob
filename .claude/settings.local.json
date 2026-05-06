@@ -20,7 +20,8 @@
       "Bash(taskkill /F /PID 7256)",
       "Bash(taskkill /F /PID 27760)",
       "Bash(powershell -Command 'Get-Process | Where-Object { $_.Path -like '\\\\''*python*'\\\\'' -or $_.Path -like '\\\\''*pio*'\\\\'' -or $_.Path -like '\\\\''*scons*'\\\\'' } | Stop-Process -Force')",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "Bash(~/.platformio/penv/Scripts/pio run:*)"
     ]
   }
 }

@@ -6,7 +6,6 @@
 void display_init();
 void display_splash();
 void display_animate_splash(uint16_t duration_ms);
-void display_clear();
 void display_mark_dirty();
 bool display_is_dirty();
 void display_flush();

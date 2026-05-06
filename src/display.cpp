@@ -632,27 +632,6 @@ void display_animate_splash(uint16_t duration_ms)
     // No-op — splash animation is now self-contained
 }
 
-void display_clear()
-{
-    // Create a fresh blank screen and switch to it
-    lv_obj_t *new_scr = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(new_scr, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(new_scr, LV_OPA_COVER, 0);
-
-    lv_obj_t *old_scr = lv_screen_active();
-    lv_screen_load(new_scr);
-    if (old_scr && old_scr != new_scr) {
-        lv_obj_delete(old_scr);
-    }
-
-    // Null ALL static LVGL pointers — splash
-    lbl_splash = NULL;
-    scr_splash = NULL;
-    arc_splash = NULL;
-
-    dirty = true;
-}
-
 void display_mark_dirty()
 {
     dirty = true;

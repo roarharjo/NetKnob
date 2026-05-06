@@ -37,10 +37,18 @@ The board has two ESP chips. USB-C orientation selects which is connected:
   - Backspin (fast CCW flick) opens main menu from any screen
   - Shake (3+ rapid reversals) triggers emergency stop
   - 3-level hierarchy: Main Menu → Group Menu → Screen
-- **BLE Scanner**: NimBLE passive scanning with device classification
+- **BLE Scanner**: NimBLE continuous scanning with device classification
+  - Live RSSI tracking with exponential moving average
+  - Thread-safe device list (FreeRTOS mutex + snapshot rendering)
   - Name-based and protocol-based manufacturer identification
   - Apple subtype parsing (AirPods, iBeacon, Find My, AirDrop)
   - Device type detection via appearance, service UUIDs, and name patterns
+  - Device aging: stale after 60s, removed after 120s
+  - Scrollable list (6 visible rows) with detail view on hold
+- **WiFi Scanner** enhancements:
+  - Compact 12px font AP list (12 visible rows, up from 4)
+  - Scrollable AP list with auto-scroll on selection
+  - Color-coded RSSI values per AP
 - **Settings**: 9 NVS-persisted settings (lock, WiFi region, brightness, haptic, etc.)
 - **Safe-Lock**: 3-digit combination lock (0-39 dial) with SHA-256 hash storage
   - Escalating lockout (1s, 5s, 30s) on failed attempts
@@ -117,7 +125,8 @@ NetKnob/
     ├── PHASE1-HANDOVER.md
     ├── PHASE2-FSD-EN.md
     ├── PHASE2-HANDOVER.md
-    └── SESSION-REVIEW-P2.md
+    ├── SESSION-REVIEW-P2.md
+    └── PHASE2-BUGFIX-SESSION.md
 ```
 
 ---
