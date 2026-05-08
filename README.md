@@ -1,6 +1,6 @@
 # NetKnob
 
-WiFi channel scanner with dial control on Waveshare ESP32-S3 Knob.
+Multi-radio scanner and security tool on the Waveshare ESP32-S3 Knob.
 
 ---
 
@@ -15,37 +15,48 @@ WiFi channel scanner with dial control on Waveshare ESP32-S3 Knob.
 | Input | Rotary encoder dial |
 | Touch | Capacitive touchscreen (CST816) |
 | Haptics | LRA motor via DRV2605L (I2C) |
-| Connectivity | WiFi 802.11 b/g/n (single chip) |
+| Connectivity | WiFi 802.11 b/g/n, BLE 5.0 (single chip) |
 
 The board has two ESP chips. USB-C orientation selects which is connected:
-- Primary face: ESP32-S3 (COM9) — display, WiFi, encoder, touch, haptics
-- Flipped: ESP32 (COM7) — Bluetooth, audio (reserved for later phases)
+- Primary face: ESP32-S3 (COM9) — display, WiFi, BLE, encoder, touch, haptics
+- Flipped: ESP32 (COM7) — Bluetooth Classic, audio (reserved for Phase 4+)
 
 ---
 
-## Features (Phase 1)
+## Features
 
+### Phase 1 — WiFi Scanner
 - Passive WiFi scanning via promiscuous mode — no packets transmitted
-- Channel hopping (1-13) controlled by rotary encoder
+- Channel hopping (1-14) controlled by rotary encoder with region setting
 - AP list view with live RSSI bars and colour-coded signal strength
-- Detail view per AP: channel, RSSI, BSSID, estimated distance, OUI vendor lookup
+- Detail view per AP: channel, RSSI, BSSID, encryption, OUI vendor lookup
 - AP aging — networks fade and expire when no longer heard
-- Haptic feedback on encoder rotation and view transitions
-- Smooth arc animation reflecting current channel position
-- Neon/cyber UI aesthetic built on LVGL 9.2
 
----
-
-## Phase 1 Scope
-
-Phase 1 is passive observation only.
-
-Out of scope for Phase 1 (reserved for later phases):
-- Deauthentication or any active attacks (Phase 2)
-- BLE/Bluetooth scanning (Phase 3-4)
-- Secondary ESP32 communication (Phase 4)
-- Audio monitoring (Phase 5)
-- Persistent storage / SD card logging
+### Phase 2 — Navigation, BLE, Settings, Lock
+- **Navigation system**: gesture-driven multi-screen architecture
+  - Backspin (fast CCW flick) opens main menu from any screen
+  - Shake (3+ rapid reversals) triggers emergency stop
+  - 3-level hierarchy: Main Menu → Group Menu → Screen
+- **BLE Scanner**: NimBLE continuous scanning with device classification
+  - Live RSSI tracking with exponential moving average
+  - Thread-safe device list (FreeRTOS mutex + snapshot rendering)
+  - Zero-cache NimBLE mode (`setMaxResults(0)`) — no heap leak
+  - Name-based and protocol-based manufacturer identification
+  - Apple subtype parsing (AirPods, iBeacon, Find My, AirDrop)
+  - Device type detection via appearance, service UUIDs, and name patterns
+  - Device aging: stale after 60s, removed after 120s
+  - Scrollable list (6 visible rows) with detail view on hold
+- **WiFi Scanner** enhancements:
+  - Compact 12px font AP list (12 visible rows, up from 4)
+  - Scrollable AP list with auto-scroll on selection
+  - Color-coded RSSI values per AP
+- **Diagnostics**: reset reason logged on boot, BLE device count in heartbeat
+- **Settings**: 9 NVS-persisted settings (lock, WiFi region, brightness, haptic, etc.)
+- **Safe-Lock**: 3-digit combination lock (0-39 dial) with SHA-256 hash storage
+  - Escalating lockout (1s, 5s, 30s) on failed attempts
+  - Auto-lock on inactivity timeout
+- **Debug screen**: real-time heap, PSRAM, WiFi/BLE status, uptime
+- **Heap monitoring**: 10s periodic serial logging with threshold alerts
 
 ---
 
@@ -72,10 +83,11 @@ Default upload port: `COM9`. Change in `platformio.ini` if your port differs.
 | Build system | PlatformIO, espressif32 platform 6.6.0 |
 | Framework | Arduino + ESP-IDF |
 | UI library | LVGL 9.2.x |
-| Display driver | Custom QSPI driver (direct SPI peripheral, no esp_lcd component) |
+| Display driver | Custom QSPI driver (direct SPI peripheral) |
 | WiFi | ESP-IDF promiscuous mode API |
-
-LVGL is configured entirely via `build_flags` in `platformio.ini` (no `lv_conf.h` file needed).
+| BLE | NimBLE-Arduino 1.4.x (passive scanning) |
+| Storage | ESP-IDF NVS (Non-Volatile Storage) |
+| Crypto | mbedtls SHA-256 (lock code hashing) |
 
 ---
 
@@ -83,26 +95,53 @@ LVGL is configured entirely via `build_flags` in `platformio.ini` (no `lv_conf.h
 
 ```
 NetKnob/
-├── platformio.ini          # Build configuration, LVGL flags, upload settings
-├── TECHNICAL_REFERENCE.md  # Hardware deep-dive: pins, gotchas, what does/doesn't work
-├── PHASE1-FSD-EN.md        # Phase 1 functional specification
+├── platformio.ini              # Build config, LVGL + NimBLE flags
+├── TECHNICAL_REFERENCE.md      # Hardware deep-dive: pins, gotchas
 ├── src/
-│   ├── main.cpp            # Setup, main loop, screen state machine
-│   ├── display.cpp/.h      # QSPI driver, LVGL integration, all screen rendering
-│   ├── encoder.cpp/.h      # Rotary encoder with interrupt-driven delta accumulation
-│   ├── touch.cpp/.h        # CST816 capacitive touch over I2C
-│   ├── haptic.cpp/.h       # DRV2605L LRA haptic driver over I2C
-│   ├── wifi_scanner.cpp/.h # Promiscuous mode scanner, AP list, channel management
-│   ├── interchip.h         # ESP-NOW message types for secondary ESP32 (Phase 4+)
-│   └── pins.h              # All GPIO pin definitions in one place
+│   ├── main.cpp                # Setup, main loop, gesture→navigation dispatch
+│   ├── display.cpp/.h          # QSPI driver, LVGL setup, shared colour palette
+│   ├── encoder.cpp/.h          # Timer-polled encoder with event stream
+│   ├── touch.cpp/.h            # CST816 capacitive touch (tap + hold)
+│   ├── haptic.cpp/.h           # DRV2605L LRA haptic driver
+│   ├── wifi_scanner.cpp/.h     # Promiscuous WiFi scanner + beacon parser
+│   ├── ble_scanner.cpp/.h      # NimBLE passive BLE scanner
+│   ├── gesture.cpp/.h          # Encoder velocity, backspin, shake detection
+│   ├── navigation.cpp/.h       # Screen lifecycle + state machine
+│   ├── settings.cpp/.h         # NVS settings + lock code management
+│   ├── safe_lock.cpp/.h        # Combination lock logic
+│   ├── heap_monitor.cpp/.h     # Periodic heap logging + alerts
+│   ├── interchip.h             # ESP-NOW message types (Phase 4+)
+│   ├── pins.h                  # GPIO pin definitions
+│   └── screens/
+│       ├── scr_main_menu.cpp/.h    # Main menu (WiFi/BLE/System)
+│       ├── scr_group_menu.cpp/.h   # Group menu (screens within group)
+│       ├── scr_wifi_scan.cpp/.h    # WiFi scanner screen
+│       ├── scr_ble_scan.cpp/.h     # BLE scanner screen
+│       ├── scr_settings.cpp/.h     # Settings editor
+│       ├── scr_safe_lock.cpp/.h    # Safe-lock dial screen
+│       └── scr_debug.cpp/.h        # System debug/heap screen
 ├── include/
-│   └── pins.h              # (see src/pins.h)
-├── docs/
-│   ├── PHASE1-DEVELOPMENT.md  # Development log: decisions, bugs, solutions
-│   ├── PHASE1-HANDOVER.md     # Handover guide for future contributors
-│   └── SESSION-REVIEW.md      # Session retrospective
-└── temp_volosr/            # Reference implementation from Waveshare community repo
+│   └── pins.h
+└── docs/
+    ├── PHASE1-DEVELOPMENT.md
+    ├── PHASE1-HANDOVER.md
+    ├── PHASE2-FSD-EN.md
+    ├── PHASE2-HANDOVER.md
+    ├── SESSION-REVIEW-P2.md
+    ├── PHASE2-BUGFIX-SESSION.md
+    └── SESSION-REVIEW-BUGFIX.md
 ```
+
+---
+
+## Memory Budget (Phase 2)
+
+```
+Internal SRAM:  37.9% used (124 KB / 328 KB)
+Flash:          36.7% used (1.2 MB / 3.3 MB)
+```
+
+Comfortable headroom for Phase 3 features (WiFi attacks, active BLE).
 
 ---
 
@@ -110,8 +149,8 @@ NetKnob/
 
 NetKnob is built for educational purposes and authorised security research.
 
-Passive WiFi scanning (promiscuous mode) captures management frames broadcast publicly
-by access points. No data is stored. No packets are injected or transmitted.
+Passive WiFi and BLE scanning captures publicly broadcast frames and advertisements.
+No data is stored persistently. No packets are injected or transmitted (Phases 1-2).
 
 Use only on networks and in environments you are authorised to test.
 The author accepts no liability for misuse.

@@ -1,37 +1,30 @@
 #include <Arduino.h>
 #include <lvgl.h>
-#include <string.h>
+#include <esp_system.h>
 #include "display.h"
 #include "encoder.h"
 #include "touch.h"
 #include "haptic.h"
 #include "wifi_scanner.h"
+#include "gesture.h"
+#include "navigation.h"
+#include "heap_monitor.h"
+#include "settings.h"
+#include "ble_scanner.h"
+#include "safe_lock.h"
 #include "pins.h"
 #include "interchip.h"
 
+// Screen definitions
+#include "screens/scr_main_menu.h"
+#include "screens/scr_group_menu.h"
+#include "screens/scr_wifi_scan.h"
+#include "screens/scr_ble_scan.h"
+#include "screens/scr_settings.h"
+#include "screens/scr_debug.h"
+#include "screens/scr_safe_lock.h"
+
 #define SPLASH_DURATION_MS 1500
-
-enum EncoderMode {
-    ENC_CHANNEL_HOP,      // Phase 1: encoder controls channel selection
-    ENC_TARGET_SELECT,    // Phase 2+: encoder selects target
-    ENC_SCREEN_SWITCH,    // Phase 2+: encoder switches screen
-    ENC_LOCKED            // During active attack
-};
-
-enum Screen {
-    SCREEN_WIFI_SCAN,
-    // SCREEN_DEAUTH,        // Phase 2
-    // SCREEN_BEACON_FLOOD,  // Phase 2
-    // SCREEN_BLE_SCAN,      // Phase 3
-    // SCREEN_BT_SCAN,       // Phase 4
-    // SCREEN_AUDIO_MON,     // Phase 5
-    // SCREEN_DUAL_STATUS,   // Phase 6
-    // SCREEN_BOOT_MENU,     // Phase 7
-    SCREEN_COUNT
-};
-
-static Screen currentScreen = SCREEN_WIFI_SCAN;
-static EncoderMode encoderMode = ENC_CHANNEL_HOP;
 
 void on_secondary_esp_message(const EspNowMessage *msg) {
     // Phase 4: handle messages from secondary ESP32
@@ -40,8 +33,14 @@ void on_secondary_esp_message(const EspNowMessage *msg) {
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    Serial.println("NetKnob Phase 1 — booting...");
+    Serial.println("NetKnob Phase 2 — booting...");
+
+    esp_reset_reason_t reason = esp_reset_reason();
+    const char* reasons[] = {"UNKNOWN","POWERON","EXT","SW","PANIC","INT_WDT","TASK_WDT","WDT","DEEPSLEEP","BROWNOUT","SDIO"};
+    Serial.printf("[main] reset reason: %s (%d)\n", reason < 11 ? reasons[reason] : "?", reason);
     Serial.printf("[main] free heap: %d, PSRAM: %d\n", ESP.getFreeHeap(), ESP.getPsramSize());
+
+    settings_init();
 
     Serial.println("[main] display_init...");
     display_init();
@@ -51,17 +50,33 @@ void setup() {
     encoder_init(PIN_ENC_A, PIN_ENC_B);
     touch_init();
     haptic_init();
+    gesture_init();
     scanner_init();
+    ble_scanner_init();
+    safe_lock_init();
 
     display_animate_splash(SPLASH_DURATION_MS);
-    display_clear();
-    display_mark_dirty();
 
+    // Register all screens
+    navigation_init();
+    navigation_register_screen(&scr_main_menu_def);
+    navigation_register_screen(&scr_group_menu_def);
+    navigation_register_screen(&scr_wifi_scan_def);
+    navigation_register_screen(&scr_ble_scan_def);
+    navigation_register_screen(&scr_settings_def);
+    navigation_register_screen(&scr_debug_def);
+    navigation_register_screen(&scr_safe_lock_def);
+
+    // Boot to lock screen or main menu
+    if (settings_get()->lock_enabled && settings_has_lock_code()) {
+        navigation_goto(SCREEN_SAFE_LOCK);
+    } else {
+        navigation_goto(SCREEN_MAIN_MENU);
+    }
+
+    heap_monitor_init();
     Serial.println("[main] setup complete");
 }
-
-static uint8_t prev_ap_count = 0xFF;
-static bool prev_scanning = false;
 
 #define SERIAL_HEARTBEAT_MS 5000
 static uint32_t last_heartbeat = 0;
@@ -71,83 +86,113 @@ void loop() {
     touch_read();
     touch_update();
 
-    WifiScannerState *s = scanner_get_state();
+    // 2. Gesture processing (consumes encoder events)
+    GestureEvent gesture = gesture_update();
 
-    // 2. Encoder → channel hop (only when not in detail view)
-    int8_t d = encoder_get_delta();
-    if (!s->detail_view && d != 0) {
-        uint8_t ch = s->current_channel;
-        ch = ((ch - 1 + d + CHANNEL_MAX) % CHANNEL_MAX) + 1;
-        scanner_set_channel(ch);
-        haptic_click();
-        display_mark_dirty();
-    }
-
-    // 3. Touch interaction
-    if (!s->detail_view) {
-        if (touch_tapped() && s->ap_count > 0) {
-            s->selected_index = (s->selected_index + 1) % s->ap_count;
-            memcpy(s->selected_bssid, s->ap_list[s->selected_index].bssid, 6);
-            display_mark_dirty();
-        }
-        if (touch_held() && s->ap_count > 0) {
-            s->detail_view = true;
-            haptic_double_click();
-            display_clear();
-            display_mark_dirty();
-        }
+    // 3. Gesture-level actions (highest priority)
+    if (gesture == GESTURE_SHAKE) {
+        navigation_emergency_stop();
+    } else if (gesture == GESTURE_BACKSPIN) {
+        navigation_open_menu();
     } else {
+        // 4. Route encoder delta to active screen
+        int8_t delta = gesture_get_delta();
+        if (delta != 0) {
+            navigation_mark_activity();
+            ScreenId active = navigation_get_active();
+            switch (active) {
+                case SCREEN_MAIN_MENU:
+                    scr_main_menu_on_encoder(delta);
+                    break;
+                case SCREEN_GROUP_MENU:
+                    scr_group_menu_on_encoder(delta);
+                    break;
+                case SCREEN_WIFI_SCAN:
+                    scr_wifi_scan_on_encoder(delta);
+                    break;
+                case SCREEN_BLE_SCAN:
+                    scr_ble_scan_on_encoder(delta);
+                    break;
+                case SCREEN_SETTINGS:
+                    scr_settings_on_encoder(delta);
+                    break;
+                case SCREEN_SAFE_LOCK:
+                    scr_safe_lock_on_encoder(delta);
+                    break;
+                default: break;
+            }
+        }
+
+        // 5. Route touch to active screen
         if (touch_tapped()) {
-            s->detail_view = false;
-            display_clear();
-            display_mark_dirty();
+            navigation_mark_activity();
+            ScreenId active = navigation_get_active();
+            switch (active) {
+                case SCREEN_MAIN_MENU:
+                    scr_main_menu_on_tap();
+                    break;
+                case SCREEN_GROUP_MENU:
+                    scr_group_menu_on_tap();
+                    break;
+                case SCREEN_WIFI_SCAN:
+                    scr_wifi_scan_on_tap();
+                    break;
+                case SCREEN_BLE_SCAN:
+                    scr_ble_scan_on_tap();
+                    break;
+                case SCREEN_SETTINGS:
+                    scr_settings_on_tap();
+                    break;
+                case SCREEN_SAFE_LOCK:
+                    scr_safe_lock_on_tap();
+                    break;
+                default: break;
+            }
+        }
+        if (touch_held()) {
+            navigation_mark_activity();
+            ScreenId active = navigation_get_active();
+            switch (active) {
+                case SCREEN_WIFI_SCAN:
+                    scr_wifi_scan_on_hold();
+                    break;
+                case SCREEN_BLE_SCAN:
+                    scr_ble_scan_on_hold();
+                    break;
+                default: break;
+            }
         }
     }
 
-    // 4. Scanner update
-    scanner_update();
+    // 6. Active screen update (live data, rendering)
+    navigation_update();
 
-    // 5. Dirty check — only on AP count change (new AP found/lost)
-    // Don't trigger on scanning state toggle — that causes flashing
-    if (s->ap_count != prev_ap_count) {
-        prev_ap_count = s->ap_count;
-        display_mark_dirty();
-    }
-
-    // Exit detail view if all APs aged out
-    if (s->detail_view && s->ap_count == 0) {
-        s->detail_view = false;
-        display_clear();
-        display_mark_dirty();
-    }
-
-    // 6. Render only when dirty (channel change, touch, new AP count)
-    if (display_is_dirty()) {
-        if (s->detail_view) {
-            display_wifi_detail(&s->ap_list[s->selected_index]);
-        } else if (s->ap_count == 0 && s->scanning) {
-            display_scanning(s->current_channel);
-        } else {
-            display_wifi_scan(s);
-        }
-        display_flush();
-    }
-
-    // 7. Live data updates (arc + RSSI numbers only, throttled to 2Hz)
-    if (!s->detail_view && s->ap_count > 0) {
-        display_update_live(s);
-        display_update_arc_pulse();
-    }
-
-    // 8. LVGL tick
+    // 7. LVGL tick
     lv_timer_handler();
 
-    // 9. Serial debug heartbeat
+    // 8. Heap monitoring
+    heap_monitor_update();
+
+    // 9. Auto-lock check
     uint32_t now = millis();
+    const Settings* cfg = settings_get();
+    if (cfg->lock_enabled && cfg->lock_timeout_min > 0 && settings_has_lock_code()) {
+        const NavigationState* nav = navigation_get_state();
+        if (nav->active_screen != SCREEN_SAFE_LOCK) {
+            uint32_t timeout_ms = (uint32_t)cfg->lock_timeout_min * 60000;
+            if (now - nav->last_activity_ms >= timeout_ms) {
+                navigation_goto(SCREEN_SAFE_LOCK);
+            }
+        }
+    }
+
+    // 10. Serial debug heartbeat
     if (now - last_heartbeat >= SERIAL_HEARTBEAT_MS) {
         last_heartbeat = now;
-        Serial.printf("[heartbeat] ch=%d aps=%d scanning=%d detail=%d heap=%d\n",
-            s->current_channel, s->ap_count, s->scanning, s->detail_view,
-            ESP.getFreeHeap());
+        WifiScannerState *ws = scanner_get_state();
+        BleScannerState *bs = ble_scanner_get_state();
+        Serial.printf("[heartbeat] screen=%d ch=%d aps=%d ble=%d heap=%d\n",
+            navigation_get_active(), ws->current_channel, ws->ap_count,
+            bs->device_count, ESP.getFreeHeap());
     }
 }
