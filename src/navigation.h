@@ -17,6 +17,8 @@ enum ScreenId {
     SCREEN_SETTINGS,
     SCREEN_DEBUG,
     SCREEN_SAFE_LOCK,
+    SCREEN_BEACON_FLOOD,
+    SCREEN_PROBE_SNIFF,
     SCREEN_COUNT
 };
 
@@ -26,6 +28,7 @@ enum EncoderMode {
     ENC_BLE_LIST,       // BLE device list scroll
     ENC_SAFE_LOCK,      // Safe-lock dial
     ENC_SETTINGS,       // Settings scroll/adjust
+    ENC_ATTACK_PARAM,       // Attack parameter adjustment
     ENC_LOCKED          // Encoder ignored
 };
 

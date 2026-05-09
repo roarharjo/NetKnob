@@ -2,6 +2,7 @@
 #include "display.h"
 #include "haptic.h"
 #include "heap_monitor.h"
+#include "attack_common.h"
 #include <Arduino.h>
 #include <lvgl.h>
 #include <string.h>
@@ -52,7 +53,8 @@ void navigation_open_menu() {
 }
 
 void navigation_emergency_stop() {
-    haptic_play(10);  // Strong double-pulse
+    attack_emergency_stop();  // Halt any active attack
+    haptic_play(10);          // Strong double-pulse
     navigation_goto(SCREEN_MAIN_MENU);
     Serial.println("[nav] EMERGENCY STOP");
 }
