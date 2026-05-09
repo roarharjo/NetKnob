@@ -4,6 +4,7 @@
 #include <esp_wifi_types.h>
 #include <string.h>
 #include "wifi_scanner.h"
+#include "wifi_probe_sniffer.h"
 
 // ---------------------------------------------------------------------------
 // Ring buffer for ISR-safe frame passing
@@ -76,6 +77,13 @@ static void IRAM_ATTR promisc_callback(void* buf, wifi_promiscuous_pkt_type_t ty
 
     // Check subtype: beacon (0x80) or probe response (0x50)
     uint8_t fc0 = frame[0];
+
+    // Forward probe requests to sniffer
+    if (fc0 == 0x40) {
+        probe_sniffer_on_frame(frame, frame_len, pkt->rx_ctrl.rssi, pkt->rx_ctrl.channel);
+        return;
+    }
+
     if (fc0 != 0x80 && fc0 != 0x50) return;
 
     // Copy to ring buffer

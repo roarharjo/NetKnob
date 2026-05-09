@@ -22,7 +22,11 @@ static void populate_group(ScreenGroup g) {
         case GROUP_WIFI:
             group_screens[0] = SCREEN_WIFI_SCAN;
             group_screen_names[0] = "Scanner";
-            group_screen_count = 1;
+            group_screens[1] = SCREEN_BEACON_FLOOD;
+            group_screen_names[1] = "Beacon Flood";
+            group_screens[2] = SCREEN_PROBE_SNIFF;
+            group_screen_names[2] = "Probe Sniffer";
+            group_screen_count = 3;
             break;
         case GROUP_BLE:
             group_screens[0] = SCREEN_BLE_SCAN;

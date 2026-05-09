@@ -24,7 +24,10 @@
       "Bash(~/.platformio/penv/Scripts/pio run:*)",
       "Bash(~/.platformio/penv/Scripts/pio device:*)",
       "Bash(taskkill //F //IM \"pio.exe\")",
-      "Bash(taskkill //F //IM \"python.exe\")"
+      "Bash(taskkill //F //IM \"python.exe\")",
+      "Bash(where pio:*)",
+      "Bash(netsh wlan:*)",
+      "Bash(taskkill //F //IM \"python.exe\" //FI \"WINDOWTITLE eq *monitor*\")"
     ]
   }
 }

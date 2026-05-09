@@ -23,6 +23,11 @@
 #include "screens/scr_settings.h"
 #include "screens/scr_debug.h"
 #include "screens/scr_safe_lock.h"
+#include "attack_common.h"
+#include "wifi_attack.h"
+#include "wifi_probe_sniffer.h"
+#include "screens/scr_beacon_flood.h"
+#include "screens/scr_probe_sniff.h"
 
 #define SPLASH_DURATION_MS 1500
 
@@ -54,6 +59,9 @@ void setup() {
     scanner_init();
     ble_scanner_init();
     safe_lock_init();
+    attack_init();
+    wifi_attack_init();
+    probe_sniffer_init();
 
     display_animate_splash(SPLASH_DURATION_MS);
 
@@ -66,6 +74,8 @@ void setup() {
     navigation_register_screen(&scr_settings_def);
     navigation_register_screen(&scr_debug_def);
     navigation_register_screen(&scr_safe_lock_def);
+    navigation_register_screen(&scr_beacon_flood_def);
+    navigation_register_screen(&scr_probe_sniff_def);
 
     // Boot to lock screen or main menu
     if (settings_get()->lock_enabled && settings_has_lock_code()) {
@@ -119,6 +129,12 @@ void loop() {
                 case SCREEN_SAFE_LOCK:
                     scr_safe_lock_on_encoder(delta);
                     break;
+                case SCREEN_BEACON_FLOOD:
+                    scr_beacon_flood_on_encoder(delta);
+                    break;
+                case SCREEN_PROBE_SNIFF:
+                    scr_probe_sniff_on_encoder(delta);
+                    break;
                 default: break;
             }
         }
@@ -146,6 +162,12 @@ void loop() {
                 case SCREEN_SAFE_LOCK:
                     scr_safe_lock_on_tap();
                     break;
+                case SCREEN_BEACON_FLOOD:
+                    scr_beacon_flood_on_tap();
+                    break;
+                case SCREEN_PROBE_SNIFF:
+                    scr_probe_sniff_on_tap();
+                    break;
                 default: break;
             }
         }
@@ -159,6 +181,12 @@ void loop() {
                 case SCREEN_BLE_SCAN:
                     scr_ble_scan_on_hold();
                     break;
+                case SCREEN_BEACON_FLOOD:
+                    scr_beacon_flood_on_hold();
+                    break;
+                case SCREEN_PROBE_SNIFF:
+                    scr_probe_sniff_on_hold();
+                    break;
                 default: break;
             }
         }
@@ -166,6 +194,11 @@ void loop() {
 
     // 6. Active screen update (live data, rendering)
     navigation_update();
+
+    // Phase 3: attack engine updates (run regardless of active screen)
+    attack_update();
+    wifi_attack_update();
+    probe_sniffer_update();
 
     // 7. LVGL tick
     lv_timer_handler();
