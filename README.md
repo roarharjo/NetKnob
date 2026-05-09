@@ -32,6 +32,26 @@ The board has two ESP chips. USB-C orientation selects which is connected:
 - Detail view per AP: channel, RSSI, BSSID, encryption, OUI vendor lookup
 - AP aging — networks fade and expire when no longer heard
 
+### Phase 3 — WiFi Attacks
+- **Beacon Flood**: broadcast fake access points visible to nearby devices
+  - 3 SSID generation modes: random, wordlist (20 funny names), clone nearby APs
+  - Configurable: SSID count (1-50), TX rate (1-100/s per SSID), duration (5-300s or infinite)
+  - Full attack lifecycle: CONFIG → ARMED (1s countdown) → RUNNING → COMPLETE
+  - Safety: touch-hold to start/stop, shake emergency stop, encoder locked during attack
+  - Magenta border glow during active flood, live stats (packets sent, rate, progress)
+  - Attack persists across navigation — runs in background until stopped
+- **Probe Sniffer**: capture probe requests revealing what networks nearby devices search for
+  - Real-time scrolling list of source MAC → probed SSID
+  - Randomized MAC detection (bit 1 of first byte) with visual dimming
+  - Detail view: full MAC, vendor (OUI lookup), all SSIDs probed by device, RSSI, probe count
+  - Channel hopping via encoder (same as WiFi scanner)
+  - 100-entry circular buffer, unique device and SSID counting
+- **Attack Engine**: general-purpose state machine reusable for future attack types
+  - Shared by beacon flood (and future deauth in Phase 4)
+  - Pre-built frame templates — no dynamic allocation during active attack
+  - TX+RX coexistence verified: scanner continues during attacks without time-division
+- **Note**: Deauth blocked on ESP32-S3 (hardened WiFi blob dual-layer frame type filter). Descoped to Phase 4 (secondary ESP32). See `docs/spike-results.md`.
+
 ### Phase 2 — Navigation, BLE, Settings, Lock
 - **Navigation system**: gesture-driven multi-screen architecture
   - Backspin (fast CCW flick) opens main menu from any screen
@@ -110,12 +130,17 @@ NetKnob/
 │   ├── settings.cpp/.h         # NVS settings + lock code management
 │   ├── safe_lock.cpp/.h        # Combination lock logic
 │   ├── heap_monitor.cpp/.h     # Periodic heap logging + alerts
+│   ├── attack_common.cpp/.h    # Attack state machine + safety layer
+│   ├── wifi_attack.cpp/.h      # Beacon flood engine + frame crafting
+│   ├── wifi_probe_sniffer.cpp/.h # Probe request capture + parse
 │   ├── interchip.h             # ESP-NOW message types (Phase 4+)
 │   ├── pins.h                  # GPIO pin definitions
 │   └── screens/
 │       ├── scr_main_menu.cpp/.h    # Main menu (WiFi/BLE/System)
 │       ├── scr_group_menu.cpp/.h   # Group menu (screens within group)
 │       ├── scr_wifi_scan.cpp/.h    # WiFi scanner screen
+│       ├── scr_beacon_flood.cpp/.h # Beacon flood attack screen
+│       ├── scr_probe_sniff.cpp/.h  # Probe sniffer screen
 │       ├── scr_ble_scan.cpp/.h     # BLE scanner screen
 │       ├── scr_settings.cpp/.h     # Settings editor
 │       ├── scr_safe_lock.cpp/.h    # Safe-lock dial screen
@@ -129,19 +154,20 @@ NetKnob/
     ├── PHASE2-HANDOVER.md
     ├── SESSION-REVIEW-P2.md
     ├── PHASE2-BUGFIX-SESSION.md
-    └── SESSION-REVIEW-BUGFIX.md
+    ├── SESSION-REVIEW-BUGFIX.md
+    └── spike-results.md        # Phase 3 pre-validation results
 ```
 
 ---
 
-## Memory Budget (Phase 2)
+## Memory Budget (Phase 3)
 
 ```
-Internal SRAM:  37.9% used (124 KB / 328 KB)
-Flash:          36.7% used (1.2 MB / 3.3 MB)
+Internal SRAM:  44.1% used (145 KB / 328 KB)
+Flash:          37.5% used (1.25 MB / 3.3 MB)
 ```
 
-Comfortable headroom for Phase 3 features (WiFi attacks, active BLE).
+Comfortable headroom for Phase 4 features (secondary ESP32, BT Classic).
 
 ---
 
@@ -150,7 +176,8 @@ Comfortable headroom for Phase 3 features (WiFi attacks, active BLE).
 NetKnob is built for educational purposes and authorised security research.
 
 Passive WiFi and BLE scanning captures publicly broadcast frames and advertisements.
-No data is stored persistently. No packets are injected or transmitted (Phases 1-2).
+Phase 3 adds active WiFi capabilities (beacon flood transmits frames, probe sniffer is passive capture).
+No data is stored persistently beyond NVS settings.
 
 Use only on networks and in environments you are authorised to test.
 The author accepts no liability for misuse.

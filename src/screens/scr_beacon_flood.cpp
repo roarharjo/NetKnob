@@ -288,7 +288,7 @@ static void update_running_display() {
 
     lv_label_set_text_fmt(lbl_run_ssids, "SSIDs: %u active", st->ssid_count);
 
-    lv_label_set_text_fmt(lbl_run_rate, "Rate:  %.1f pkt/s", (double)st->stats.avg_tx_rate);
+    lv_label_set_text_fmt(lbl_run_rate, "Rate:  %lu pkt/s", (unsigned long)st->stats.avg_tx_rate);
 
     lv_label_set_text_fmt(lbl_run_sent, "Sent:  %lu pkts",
                           (unsigned long)st->stats.packets_sent);
@@ -324,8 +324,8 @@ static void update_complete_display() {
     lv_label_set_text_fmt(lbl_comp_dur,   "Duration: %lus", (unsigned long)dur_s);
     lv_label_set_text_fmt(lbl_comp_total, "Total TX: %lu pkts",
                           (unsigned long)st->stats.packets_sent);
-    lv_label_set_text_fmt(lbl_comp_rate,  "Avg rate: %.1f pkt/s",
-                          (double)st->stats.avg_tx_rate);
+    lv_label_set_text_fmt(lbl_comp_rate,  "Avg rate: %lu pkt/s",
+                          (unsigned long)st->stats.avg_tx_rate);
 }
 
 // ============================================================================
