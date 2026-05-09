@@ -27,7 +27,9 @@
       "Bash(taskkill //F //IM \"python.exe\")",
       "Bash(where pio:*)",
       "Bash(netsh wlan:*)",
-      "Bash(taskkill //F //IM \"python.exe\" //FI \"WINDOWTITLE eq *monitor*\")"
+      "Bash(taskkill //F //IM \"python.exe\" //FI \"WINDOWTITLE eq *monitor*\")",
+      "Bash(mode COM9)",
+      "Bash(powershell.exe:*)"
     ]
   }
 }
