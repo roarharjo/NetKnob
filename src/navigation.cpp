@@ -3,6 +3,7 @@
 #include "haptic.h"
 #include "heap_monitor.h"
 #include "attack_common.h"
+#include "wifi_probe_sniffer.h"
 #include <Arduino.h>
 #include <lvgl.h>
 #include <string.h>
@@ -54,6 +55,7 @@ void navigation_open_menu() {
 
 void navigation_emergency_stop() {
     attack_emergency_stop();  // Halt any active attack
+    probe_sniffer_stop();     // Halt any active probe capture
     haptic_play(10);          // Strong double-pulse
     navigation_goto(SCREEN_MAIN_MENU);
     Serial.println("[nav] EMERGENCY STOP");
